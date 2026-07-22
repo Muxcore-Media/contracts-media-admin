@@ -44,6 +44,7 @@ service MediaAdminService {
 
 message DeleteItemRequest {
   string id = 1;
+  bool delete_files = 2;
 }
 
 message DeleteItemResponse {}
