@@ -38,6 +38,25 @@ service MediaAdminService {
   // SearchIndexers searches configured indexers for sources matching the
   // given media item and returns available downloads.
   rpc SearchIndexers(SearchIndexersRequest) returns (SearchIndexersResponse);
+
+  // ListHistory returns grab/import/delete activity for this library.
+  rpc ListHistory(ListHistoryRequest) returns (ListHistoryResponse);
+
+  // ListMissing returns monitored items that lack a file.
+  rpc ListMissing(ListMissingRequest) returns (ListMissingResponse);
+
+  // Tag management.
+  rpc ListTags(ListTagsRequest) returns (ListTagsResponse);
+  rpc CreateTag(CreateTagRequest) returns (CreateTagResponse);
+  rpc DeleteTag(DeleteTagRequest) returns (DeleteTagResponse);
+  rpc SetItemTags(SetItemTagsRequest) returns (SetItemTagsResponse);
+
+  // Collections (movies). TV returns Unimplemented.
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
+  rpc GetCollectionItems(GetCollectionItemsRequest) returns (GetCollectionItemsResponse);
+
+  // Calendar (TV). Movies returns Unimplemented.
+  rpc GetCalendar(GetCalendarRequest) returns (GetCalendarResponse);
 }
 
 // --- Item Management ---
@@ -86,6 +105,8 @@ message GetMediaTypeInfoResponse {
   string display_name = 1;  // "Movies", "TV Shows", "Books", etc.
   string icon = 2;          // CSS class or emoji for the nav tab
   repeated FilterField filter_fields = 3;
+  // Feature flags for admin UI tabs: "missing", "tags", "collections", "calendar"
+  repeated string features = 4;
 }
 
 message FilterField {
@@ -104,6 +125,7 @@ message ListItemsRequest {
   map<string, string> filters = 4; // per-type filter fields
   string sort_by = 5;
   string sort_order = 6;  // "asc" or "desc"
+  string tag_id = 7;
 }
 
 message ListItemsResponse {
@@ -179,4 +201,138 @@ message ReplaceArtworkRequest {
 
 message ReplaceArtworkResponse {
   ArtworkInfo artwork = 1;
+}
+
+// --- History / Activity ---
+
+message ListHistoryRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string item_id = 3;      // optional per-title filter
+  string event_type = 4;   // optional: grab|import|delete_item|delete_file
+}
+
+message HistoryRecord {
+  string id = 1;
+  string event_type = 2;
+  string item_id = 3;
+  string title = 4;
+  string source_title = 5;
+  string quality = 6;
+  string indexer = 7;
+  string file_path = 8;
+  string download_id = 9;
+  string created_at = 10;
+}
+
+message ListHistoryResponse {
+  repeated HistoryRecord records = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// --- Missing ---
+
+message ListMissingRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string parent_id = 3; // optional: series_id for TV
+}
+
+message MissingItem {
+  string id = 1;          // movie_id or episode_id
+  string parent_id = 2;   // movie_id (movies) or series_id (TV)
+  string title = 3;
+  int32 year = 4;
+  map<string, string> metadata = 5;
+}
+
+message ListMissingResponse {
+  repeated MissingItem items = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// --- Tags ---
+
+message ListTagsRequest {}
+
+message ListTagsResponse {
+  repeated Tag tags = 1;
+}
+
+message Tag {
+  string id = 1;
+  string label = 2;
+  string created_at = 3;
+}
+
+message CreateTagRequest {
+  string label = 1;
+}
+
+message CreateTagResponse {
+  string tag_id = 1;
+}
+
+message DeleteTagRequest {
+  string tag_id = 1;
+}
+
+message DeleteTagResponse {}
+
+message SetItemTagsRequest {
+  string item_id = 1;
+  repeated string tag_ids = 2;
+}
+
+message SetItemTagsResponse {}
+
+// --- Collections ---
+
+message ListCollectionsRequest {}
+
+message ListCollectionsResponse {
+  repeated CollectionSummary collections = 1;
+}
+
+message CollectionSummary {
+  string id = 1;
+  string name = 2;
+  int32 item_count = 3;
+}
+
+message GetCollectionItemsRequest {
+  string collection_id = 1;
+}
+
+message GetCollectionItemsResponse {
+  string collection_id = 1;
+  string name = 2;
+  repeated MediaItem items = 3;
+}
+
+// --- Calendar ---
+
+message GetCalendarRequest {
+  string start_date = 1; // YYYY-MM-DD
+  string end_date = 2;   // YYYY-MM-DD
+  bool include_unmonitored = 3;
+}
+
+message GetCalendarResponse {
+  repeated CalendarItem items = 1;
+}
+
+message CalendarItem {
+  string id = 1;          // episode_id
+  string parent_id = 2;   // series_id
+  string title = 3;       // series name
+  string subtitle = 4;    // episode name
+  string date = 5;        // air_date YYYY-MM-DD
+  bool monitored = 6;
+  bool has_file = 7;
+  map<string, string> metadata = 8;
 }
