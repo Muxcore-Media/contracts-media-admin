@@ -11,6 +11,12 @@ Protobuf/gRPC contract interfaces for media library admin services in MuxCore. C
   - `ListArtwork` / `ReplaceArtwork` — manage artwork images (posters, backgrounds, etc.)
   - `DeleteItem` / `RefreshItem` — remove or re-fetch metadata from original sources
   - `SearchIndexers` — search configured indexers for download sources
+  - `ListHistory` — grab/import/delete activity
+  - `ListMissing` — monitored items without files
+  - `ListTags` / `CreateTag` / `DeleteTag` / `SetItemTags` — tag management
+  - `ListCollections` / `GetCollectionItems` — collections (movies; TV Unimplemented)
+  - `GetCalendar` — air-date calendar (TV; movies Unimplemented)
+  - `GetMediaTypeInfo.features` — UI capability flags (`missing`, `tags`, `collections`, `calendar`)
 
 ## Implementing Modules
 
