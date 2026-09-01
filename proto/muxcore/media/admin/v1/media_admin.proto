@@ -19,14 +19,29 @@ service MediaAdminService {
   // GetItem returns a single media item with full detail.
   rpc GetItem(GetItemRequest) returns (GetItemResponse);
 
+  // ListChildren returns child items for a parent (seasons/episodes, albums/tracks).
+  rpc ListChildren(ListChildrenRequest) returns (ListChildrenResponse);
+
+  // GetChild returns one child item under a parent.
+  rpc GetChild(GetChildRequest) returns (GetChildResponse);
+
   // UpdateMetadata edits metadata fields on a media item.
   rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse);
+
+  // SetMonitored toggles monitor state on an item or child (season/episode/album/track).
+  rpc SetMonitored(SetMonitoredRequest) returns (SetMonitoredResponse);
 
   // ListArtwork returns artwork variants for a media item.
   rpc ListArtwork(ListArtworkRequest) returns (ListArtworkResponse);
 
+  // ListRemoteArtwork returns remote artwork candidates from the metadata provider.
+  rpc ListRemoteArtwork(ListRemoteArtworkRequest) returns (ListRemoteArtworkResponse);
+
   // ReplaceArtwork uploads or replaces an artwork image for a media item.
   rpc ReplaceArtwork(stream ReplaceArtworkRequest) returns (ReplaceArtworkResponse);
+
+  // DeleteArtwork removes one artwork variant from a media item.
+  rpc DeleteArtwork(DeleteArtworkRequest) returns (DeleteArtworkResponse);
 
   // DeleteItem removes a media item and its associated data from the library.
   rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse);
@@ -38,6 +53,16 @@ service MediaAdminService {
   // SearchIndexers searches configured indexers for sources matching the
   // given media item and returns available downloads.
   rpc SearchIndexers(SearchIndexersRequest) returns (SearchIndexersResponse);
+
+  // GrabRelease queues a download for an indexer result by opaque guid.
+  // Implementers resolve guid via automation/fixtures; callers must not pass raw URLs.
+  rpc GrabRelease(GrabReleaseRequest) returns (GrabReleaseResponse);
+
+  // ListFiles returns on-disk files linked to a media item.
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+
+  // RemoveFile unlinks a file from a media item.
+  rpc RemoveFile(RemoveFileRequest) returns (RemoveFileResponse);
 
   // ListHistory returns grab/import/delete activity for this library.
   rpc ListHistory(ListHistoryRequest) returns (ListHistoryResponse);
@@ -54,9 +79,57 @@ service MediaAdminService {
   // Collections (movies). TV returns Unimplemented.
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
   rpc GetCollectionItems(GetCollectionItemsRequest) returns (GetCollectionItemsResponse);
+  rpc SyncCollection(SyncCollectionRequest) returns (SyncCollectionResponse);
+  rpc SetCollectionMonitored(SetCollectionMonitoredRequest) returns (SetCollectionMonitoredResponse);
 
   // Calendar (TV). Movies returns Unimplemented.
   rpc GetCalendar(GetCalendarRequest) returns (GetCalendarResponse);
+}
+
+// --- Enums ---
+
+enum Feature {
+  FEATURE_UNSPECIFIED = 0;
+  FEATURE_MISSING = 1;
+  FEATURE_TAGS = 2;
+  FEATURE_COLLECTIONS = 3;
+  FEATURE_CALENDAR = 4;
+}
+
+enum HistoryEventType {
+  HISTORY_EVENT_TYPE_UNSPECIFIED = 0;
+  HISTORY_EVENT_TYPE_GRAB = 1;
+  HISTORY_EVENT_TYPE_IMPORT = 2;
+  HISTORY_EVENT_TYPE_DELETE_ITEM = 3;
+  HISTORY_EVENT_TYPE_DELETE_FILE = 4;
+}
+
+enum SortField {
+  SORT_FIELD_UNSPECIFIED = 0;
+  SORT_FIELD_TITLE = 1;
+  SORT_FIELD_YEAR = 2;
+  SORT_FIELD_CREATED_AT = 3;
+  SORT_FIELD_UPDATED_AT = 4;
+  SORT_FIELD_RUNTIME = 5;
+  SORT_FIELD_RATING = 6;
+}
+
+enum ArtworkType {
+  ARTWORK_TYPE_UNSPECIFIED = 0;
+  ARTWORK_TYPE_POSTER = 1;
+  ARTWORK_TYPE_BACKGROUND = 2;
+  ARTWORK_TYPE_LOGO = 3;
+  ARTWORK_TYPE_BANNER = 4;
+  ARTWORK_TYPE_THUMB = 5;
+  ARTWORK_TYPE_STILL = 6;
+}
+
+enum FilterFieldType {
+  FILTER_FIELD_TYPE_UNSPECIFIED = 0;
+  FILTER_FIELD_TYPE_TEXT = 1;
+  FILTER_FIELD_TYPE_NUMBER = 2;
+  FILTER_FIELD_TYPE_SELECT = 3;
+  FILTER_FIELD_TYPE_DATE = 4;
 }
 
 // --- Item Management ---
@@ -79,6 +152,9 @@ message RefreshItemResponse {
 message SearchIndexersRequest {
   string item_id = 1;
   int32 limit = 2;
+  // Optional TV episode targeting when item_id is a series.
+  int32 season = 3;
+  int32 episode = 4;
 }
 
 message IndexerResult {
@@ -88,13 +164,63 @@ message IndexerResult {
   int64 size = 4;
   string quality = 5;
   int32 seeders = 6;
+  // Deprecated: admin grab path uses guid + GrabRelease. May be empty.
   string download_url = 7;
   bool approved = 8;
+  string protocol = 9;
+  repeated string reject_reasons = 10;
+  int32 score = 11;
 }
 
 message SearchIndexersResponse {
   repeated IndexerResult results = 1;
   int32 total = 2;
+}
+
+message GrabReleaseRequest {
+  string item_id = 1;
+  string guid = 2;
+}
+
+message GrabReleaseResponse {
+  string download_id = 1;
+}
+
+message ListFilesRequest {
+  string item_id = 1;
+}
+
+message MediaFile {
+  string id = 1;
+  string item_id = 2;
+  string file_path = 3;
+  string quality = 4;
+  int64 size_bytes = 5;
+  string container = 6;
+  string created_at = 7;
+}
+
+message ListFilesResponse {
+  repeated MediaFile files = 1;
+}
+
+message RemoveFileRequest {
+  string item_id = 1;
+  string file_id = 2;
+  bool delete_disk = 3;
+}
+
+message RemoveFileResponse {}
+
+message SetMonitoredRequest {
+  string item_id = 1;
+  // Optional child id (season, episode, album, track). Empty applies to item_id.
+  string child_id = 2;
+  bool monitored = 3;
+}
+
+message SetMonitoredResponse {
+  MediaItem item = 1;
 }
 
 // --- Media Types ---
@@ -105,15 +231,14 @@ message GetMediaTypeInfoResponse {
   string display_name = 1;  // "Movies", "TV Shows", "Books", etc.
   string icon = 2;          // CSS class or emoji for the nav tab
   repeated FilterField filter_fields = 3;
-  // Feature flags for admin UI tabs: "missing", "tags", "collections", "calendar"
-  repeated string features = 4;
+  repeated Feature features = 4;
 }
 
 message FilterField {
-  string key = 1;          // field name in MediaItem.metadata
+  string key = 1;          // field name in MediaItem.metadata or first-class field
   string label = 2;        // display label
-  string type = 3;         // "text", "number", "select", "date"
-  repeated string options = 4;  // for "select" type
+  FilterFieldType type = 3;
+  repeated string options = 4;  // for FILTER_FIELD_TYPE_SELECT
 }
 
 // --- Items ---
@@ -123,7 +248,7 @@ message ListItemsRequest {
   int32 page_size = 2;
   string search = 3;
   map<string, string> filters = 4; // per-type filter fields
-  string sort_by = 5;
+  SortField sort_by = 5;
   string sort_order = 6;  // "asc" or "desc"
   string tag_id = 7;
 }
@@ -143,16 +268,48 @@ message GetItemResponse {
   MediaItem item = 1;
 }
 
+message ListChildrenRequest {
+  string parent_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListChildrenResponse {
+  repeated MediaItem children = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetChildRequest {
+  string parent_id = 1;
+  string child_id = 2;
+}
+
+message GetChildResponse {
+  MediaItem child = 1;
+}
+
 message MediaItem {
   string id = 1;
   string title = 2;
   string description = 3;
   int64 year = 4;
   repeated string genres = 5;
-  map<string, string> metadata = 6;  // type-specific fields (the Meta pattern)
+  // Type-specific fields not promoted to first-class columns.
+  // Movies: runtime (minutes).
+  // Music: musicbrainz_id.
+  // TV: season_number, episode_number, air_date (YYYY-MM-DD).
+  // Implementers may still mirror first-class fields here during migration.
+  map<string, string> metadata = 6;
   repeated ArtworkInfo artwork = 7;
   string created_at = 8;
   string updated_at = 9;
+  bool monitored = 10;
+  bool has_file = 11;
+  string quality_profile_id = 12;
+  string root_folder_path = 13;
+  int32 tmdb_id = 14;
 }
 
 // --- Metadata ---
@@ -164,6 +321,10 @@ message UpdateMetadataRequest {
   int64 year = 4;
   repeated string genres = 5;
   map<string, string> metadata = 6;
+  optional bool monitored = 7;
+  optional string quality_profile_id = 8;
+  optional string root_folder_path = 9;
+  optional int32 tmdb_id = 10;
 }
 
 message UpdateMetadataResponse {
@@ -180,10 +341,27 @@ message ListArtworkResponse {
   repeated ArtworkInfo artwork = 1;
 }
 
+message ListRemoteArtworkRequest {
+  string item_id = 1;
+  ArtworkType artwork_type = 2;
+}
+
+message RemoteArtworkInfo {
+  string url = 1;
+  ArtworkType type = 2;
+  int32 width = 3;
+  int32 height = 4;
+  string source = 5;
+}
+
+message ListRemoteArtworkResponse {
+  repeated RemoteArtworkInfo artwork = 1;
+}
+
 message ArtworkInfo {
   string id = 1;
   string item_id = 2;
-  string type = 3;      // "poster", "background", "logo", etc.
+  ArtworkType type = 3;
   string url = 4;        // HTTP URL served by the media module
   int32 width = 5;
   int32 height = 6;
@@ -193,7 +371,7 @@ message ArtworkInfo {
 message ReplaceArtworkRequest {
   oneof data {
     string item_id = 1;
-    string artwork_type = 2;  // "poster", "background", etc.
+    ArtworkType artwork_type = 2;
     string filename = 3;
     bytes chunk = 4;
   }
@@ -203,18 +381,25 @@ message ReplaceArtworkResponse {
   ArtworkInfo artwork = 1;
 }
 
+message DeleteArtworkRequest {
+  string item_id = 1;
+  string artwork_id = 2;
+}
+
+message DeleteArtworkResponse {}
+
 // --- History / Activity ---
 
 message ListHistoryRequest {
   int32 page = 1;
   int32 page_size = 2;
   string item_id = 3;      // optional per-title filter
-  string event_type = 4;   // optional: grab|import|delete_item|delete_file
+  HistoryEventType event_type = 4;
 }
 
 message HistoryRecord {
   string id = 1;
-  string event_type = 2;
+  HistoryEventType event_type = 2;
   string item_id = 3;
   string title = 4;
   string source_title = 5;
@@ -313,6 +498,27 @@ message GetCollectionItemsResponse {
   string name = 2;
   repeated MediaItem items = 3;
 }
+
+message SyncCollectionRequest {
+  string collection_id = 1;
+  bool add_missing = 2;
+}
+
+message SyncCollectionResponse {
+  int32 added = 1;
+  int32 already_present = 2;
+  int32 missing_on_source = 3;
+}
+
+message SetCollectionMonitoredRequest {
+  string collection_id = 1;
+  bool monitored = 2;
+  bool search_on_add = 3;
+  string quality_profile_id = 4;
+  string root_folder_path = 5;
+}
+
+message SetCollectionMonitoredResponse {}
 
 // --- Calendar ---
 
