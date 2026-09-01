@@ -1,26 +1,38 @@
 # AGENTS.md — contracts-media-admin
 
-MuxCore sidecar module (`contracts-media-admin`). Workspace deploy and SSH: [`../AGENTS.md`](../AGENTS.md). Default ports: [`_mvp/PORTS.md`](../_mvp/PORTS.md).
+Protobuf/gRPC **contract library** — not a runnable sidecar. There is no module binary, listen port, or TLS config. Workspace context: [`../AGENTS.md`](../AGENTS.md).
 
 ## Module identity
 
 | Field | Value |
 |-------|-------|
 | Directory | `contracts-media-admin` |
-| Capabilities | see muxcore.json |
-| Contracts | none declared |
+| Type | contracts (proto + generated Go) |
+| Proto | `proto/muxcore/media/admin/v1/media_admin.proto` |
+| Go module | `github.com/Muxcore-Media/contracts-media-admin` |
+| Generated package | `gen/muxcore/media/admin/v1` (`mediaadminv1`) |
+| Capability (catalog) | `contracts.media-admin` (see `muxcore.json`) |
+| Published tag | `v0.1.0` |
+
+`go_package` in the proto points at `gen/muxcore/media/admin/v1`; **do not** use `paths=source_relative` in `make proto`.
 
 ## Agent rules
 
-- Modules run as gRPC sidecars; capabilities are the security boundary.
-- TLS required in production (`MUXCORE_INSECURE_DISABLE_TLS` is dev-only).
-- Match existing Go patterns; run `gofmt` and package tests before finishing.
-- Cross-module events: prefer `github.com/Muxcore-Media/contracts-media/events` over deprecated `core/pkg/contracts` aliases.
+- Edit the `.proto` first, then regenerate with `make proto` and commit both source and `gen/`.
+- Breaking RPC or field renames require a new major contract version and coordinated updates in implementers (`media-movies`, `media-tvshows`, `media-music`, …) and callers (`admin-ui`, `muxcorectl-cli`).
+- Per-type `Unimplemented` expectations live in `COMPATIBILITY.md`.
 - Do not edit polluted workspace dumps (see `MASTER-ROADMAP.md` Appendix H).
 
 ## Build
 
 ```bash
 cd contracts-media-admin
+nix-shell -p go protobuf --run 'make proto && go test ./...'
+```
+
+On a dev host with Go and protoc plugins on PATH:
+
+```bash
+make proto
 go test ./...
 ```
