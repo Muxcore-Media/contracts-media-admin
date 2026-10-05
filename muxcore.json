@@ -1,7 +1,7 @@
 {
   "name": "Media Admin Contracts",
   "description": "Proto-generated contract interfaces for media admin services — not a runnable module.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "MuxCore",
   "type": "contracts"
 }
